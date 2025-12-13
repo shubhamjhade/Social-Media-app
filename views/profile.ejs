@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Profile</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; margin: 0; }
+        .navbar { background: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .nav-links a { text-decoration: none; color: #333; margin: 0 15px; font-weight: bold; font-size: 18px; }
+        .container { max-width: 600px; margin: 20px auto; }
+        .profile-header { background: white; padding: 30px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
+        .avatar { width: 80px; height: 80px; background: #ddd; border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+        .post-card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div style="font-weight: bold; font-size: 20px;">SocialApp</div>
+        <div class="nav-links">
+            <a href="/">🏠 Home</a>
+            <a href="/profile" style="color: #1877f2;">👤 Profile</a>
+            <a href="/logout" style="color: red;">Logout</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="profile-header">
+            <div class="avatar">👤</div>
+            <h1><%= currentUser %></h1>
+            <p>Your Personal Posts</p>
+        </div>
+
+        <h3>Your Posts</h3>
+        <% if(posts.length === 0) { %>
+            <p style="text-align: center;">You haven't posted anything yet.</p>
+        <% } %>
+
+        <% posts.forEach(post => { %>
+            <div class="post-card">
+                <div><%= post.content %></div>
+                <div style="font-size: 12px; color: gray; margin-top: 10px;">
+                    <%= post.date.toDateString() %>
+                </div>
+            </div>
+        <% }) %>
+    </div>
+
+</body>
+</html>
