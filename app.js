@@ -1,5 +1,4 @@
 const express = require('express');
-const MongoStore = require('connect-mongo');
 const mongoose = require('mongoose');
 const session = require('express-session');
 const multer = require('multer'); // Import Multer
@@ -137,24 +136,77 @@ app.get('/delete/:id', requireLogin, async (req, res) => {
   res.redirect('/'); 
 });
 
-// 4. LIKE POST
+// 4. LIKE POST (Updated for AJAX - No Refresh)
 app.get('/like/:id', requireLogin, async (req, res) => {
-  const post = await Post.findById(req.params.id);
-  
-  // Check if user already liked it
-  if (post.likes.includes(req.session.userId)) {
-    // Unlike (Remove ID from array)
-    post.likes.pull(req.session.userId);
-  } else {
-    // Like (Add ID to array)
-    post.likes.push(req.session.userId);
+  try {
+    const post = await Post.findById(req.params.id);
+    
+    // Toggle Logic
+    if (post.likes.includes(req.session.userId)) {
+      post.likes.pull(req.session.userId); // Unlike
+    } else {
+      post.likes.push(req.session.userId); // Like
+    }
+    
+    await post.save();
+
+    // INSTEAD OF REDIRECT, WE SEND JSON DATA
+    res.json({ 
+      success: true, 
+      likesCount: post.likes.length, 
+      userLiked: post.likes.includes(req.session.userId) 
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
-  
-  await post.save();
-  res.redirect('/'); // Reload page to show new count
+});
+// 5. ADD COMMENT (Updated for AJAX - No Refresh)
+app.post('/comment/:id', requireLogin, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    
+    // Create comment object
+    const newComment = {
+      user: req.session.userId,
+      username: req.session.username,
+      text: req.body.text,
+      _id: new mongoose.Types.ObjectId() // Generate ID immediately
+    };
+
+    post.comments.push(newComment);
+    await post.save();
+    
+    // Send back the new comment data as JSON
+    res.json({ success: true, comment: newComment });
+    
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
-// 5. PROFILE
+// 6. DELETE COMMENT ROUTE
+app.get('/comment/:postId/:commentId/delete', requireLogin, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    
+    // Find the comment inside the post
+    const comment = post.comments.id(req.params.commentId);
+    
+    // Check Permission: Admin OR Comment Author can delete
+    if (comment && (req.session.isAdmin || comment.user.toString() === req.session.userId)) {
+        // Remove the comment
+        post.comments.pull(req.params.commentId);
+        await post.save();
+    }
+    
+    res.redirect('/'); // Reloads page (Deleting usually needs a reload to clean up properly)
+  } catch (err) {
+    console.log(err);
+    res.redirect('/');
+  }
+});
+// 7. PROFILE
 app.get('/profile', requireLogin, async (req, res) => {
   const userPosts = await Post.find({ user: req.session.userId }).sort({ date: -1 });
   res.render('profile', { 
@@ -165,7 +217,7 @@ app.get('/profile', requireLogin, async (req, res) => {
   });
 });
 
-// 6. ADMIN
+// 8. ADMIN
 app.get('/admin', requireLogin, requireAdmin, async (req, res) => {
   const pendingUsers = await User.find({ isApproved: false });
   const activeUsers = await User.find({ isApproved: true, isAdmin: false });
