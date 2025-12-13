@@ -7,8 +7,12 @@
         .navbar { background: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: sticky; top: 0; }
         .nav-links a { text-decoration: none; color: #333; margin: 0 15px; font-weight: bold; font-size: 18px; }
         .container { max-width: 600px; margin: 20px auto; }
-        .post-card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .post-card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: relative; }
         .post-header { font-weight: bold; margin-bottom: 10px; color: #1877f2; }
+        .post-img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
+        .actions { margin-top: 15px; display: flex; gap: 15px; align-items: center; border-top: 1px solid #eee; padding-top: 10px; }
+        .btn-like { text-decoration: none; color: #555; font-weight: bold; }
+        .btn-delete { color: red; text-decoration: none; font-size: 14px; position: absolute; top: 20px; right: 20px; }
         .create-btn { display: block; width: 100%; background: #1877f2; color: white; text-align: center; padding: 15px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-bottom: 20px;}
     </style>
 </head>
@@ -18,11 +22,7 @@
         <div style="font-weight: bold; font-size: 20px;">SocialApp</div>
         <div class="nav-links">
             <a href="/">🏠 Home</a>
-
-            <% if (isAdmin) { %>
-                <a href="/admin" style="color: purple;">👑 Admin Panel</a>
-            <% } %>
-
+            <% if (isAdmin) { %> <a href="/admin" style="color: purple;">👑 Admin</a> <% } %>
             <a href="/profile">👤 Profile</a>
             <a href="/logout" style="color: red;">Logout</a>
         </div>
@@ -31,17 +31,34 @@
     <div class="container">
         <a href="/posting" class="create-btn">✍️ Create a New Post</a>
 
-        <h3>Recent Posts</h3>
-        <% if(posts.length === 0) { %>
-            <p style="text-align: center;">No posts yet.</p>
-        <% } %>
+        <% if(posts.length === 0) { %> <p style="text-align: center;">No posts yet.</p> <% } %>
 
         <% posts.forEach(post => { %>
             <div class="post-card">
                 <div class="post-header">@<%= post.username %></div>
+
+                <% if(isAdmin || post.user.toString() === currentUserId) { %>
+                    <a href="/delete/<%= post._id %>" class="btn-delete">🗑️ Delete</a>
+                <% } %>
+
                 <div><%= post.content %></div>
-                <div style="font-size: 12px; color: gray; margin-top: 10px;">
-                    <%= post.date.toDateString() %>
+
+                <% if(post.image) { %>
+                    <img src="/uploads/<%= post.image %>" class="post-img">
+                <% } %>
+
+                <div class="actions">
+                    <a href="/like/<%= post._id %>" class="btn-like">
+                        <% if(post.likes.includes(currentUserId)) { %>
+                            ❤️ <%= post.likes.length %> Likes
+                        <% } else { %>
+                            🤍 <%= post.likes.length %> Likes
+                        <% } %>
+                    </a>
+                    
+                    <span style="font-size: 12px; color: gray; margin-left: auto;">
+                        <%= post.date.toDateString() %>
+                    </span>
                 </div>
             </div>
         <% }) %>

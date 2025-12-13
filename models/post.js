@@ -2,9 +2,13 @@ const mongoose = require('mongoose');
 
 const postSchema = new mongoose.Schema({
   content: { type: String, required: true },
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Links post to a user
-  username: { type: String }, // Storing name for easier display
-  date: { type: Date, default: Date.now }
+  image: { type: String }, // Stores the filename of the uploaded image
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  username: { type: String },
+  date: { type: Date, default: Date.now },
+  
+  // Array of user IDs who liked the post
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 
 module.exports = mongoose.model('Post', postSchema);

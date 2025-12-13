@@ -8,8 +8,10 @@
         .nav-links a { text-decoration: none; color: #333; margin: 0 15px; font-weight: bold; font-size: 18px; }
         .container { max-width: 600px; margin: 20px auto; }
         .profile-header { background: white; padding: 30px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
-        .avatar { width: 80px; height: 80px; background: #ddd; border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; font-size: 30px; }
-        .post-card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .post-card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: relative; }
+        .post-img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
+        .actions { margin-top: 15px; display: flex; gap: 15px; align-items: center; border-top: 1px solid #eee; padding-top: 10px; }
+        .btn-delete { color: red; text-decoration: none; font-size: 14px; position: absolute; top: 20px; right: 20px; }
     </style>
 </head>
 <body>
@@ -18,6 +20,7 @@
         <div style="font-weight: bold; font-size: 20px;">SocialApp</div>
         <div class="nav-links">
             <a href="/">🏠 Home</a>
+            <% if (isAdmin) { %> <a href="/admin" style="color: purple;">👑 Admin</a> <% } %>
             <a href="/profile" style="color: #1877f2;">👤 Profile</a>
             <a href="/logout" style="color: red;">Logout</a>
         </div>
@@ -25,25 +28,28 @@
 
     <div class="container">
         <div class="profile-header">
-            <div class="avatar">👤</div>
             <h1><%= currentUser %></h1>
-            <p>Your Personal Posts</p>
+            <p>Your Personal Wall</p>
         </div>
-
-        <h3>Your Posts</h3>
-        <% if(posts.length === 0) { %>
-            <p style="text-align: center;">You haven't posted anything yet.</p>
-        <% } %>
 
         <% posts.forEach(post => { %>
             <div class="post-card">
+                <a href="/delete/<%= post._id %>" class="btn-delete">🗑️ Delete</a>
+
                 <div><%= post.content %></div>
-                <div style="font-size: 12px; color: gray; margin-top: 10px;">
-                    <%= post.date.toDateString() %>
+                
+                <% if(post.image) { %>
+                    <img src="/uploads/<%= post.image %>" class="post-img">
+                <% } %>
+
+                <div class="actions">
+                    <span>❤️ <%= post.likes.length %> Likes</span>
+                    <span style="font-size: 12px; color: gray; margin-left: auto;">
+                        <%= post.date.toDateString() %>
+                    </span>
                 </div>
             </div>
         <% }) %>
     </div>
-
 </body>
 </html>
