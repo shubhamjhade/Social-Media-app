@@ -1,264 +1,178 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const session = require('express-session');
-const multer = require('multer'); // Import Multer
+const multer = require('multer');
 const path = require('path');
-const cors = require('cors'); // Import CORS
+const cors = require('cors');
 const User = require('./models/user');
 const Post = require('./models/post');
 
 const app = express();
 
-// --- CORS CONFIGURATION (Connect React) ---
+// --- 1. CONFIGURATION ---
+// Allow React (Port 5173) to send cookies and requests
 app.use(cors({
-  origin: 'http://localhost:5173', // This is where React runs
-  credentials: true // Allow cookies/sessions between React and Node
+  origin: 'http://localhost:5173',
+  credentials: true
 }));
 
-// --- DB CONNECTION ---
-mongoose.connect('mongodb://127.0.0.1:27017/socialMediaDB')
-  .then(() => console.log('MongoDB Connected'))
-  .catch(err => console.error(err));
-
-// --- MULTER SETUP (For Image Uploads) ---
-const storage = multer.diskStorage({
-  destination: './public/uploads/',
-  filename: function(req, file, cb){
-    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 10000000 }, // Limit 10MB
-}).single('image');
-
-// --- MIDDLEWARE ---
-app.set('view engine', 'ejs');
+app.use(express.json()); // Handle JSON data
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json()); // IMPORTANT: Added to handle JSON data from React
-app.use(express.static('public')); 
+app.use(express.static('public')); // Serve uploaded images
 
+// Session Setup (The "Cookie")
 app.use(session({
   secret: 'supersecretkey',
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: { 
+    secure: false, // Set to true if using HTTPS
+    httpOnly: true, 
+    maxAge: 1000 * 60 * 60 * 24 // 1 Day
+  }
 }));
 
-// --- SEED OWNER ---
-async function seedOwner() {
-  await User.findOneAndUpdate(
-    { username: "shubham" },
-    { 
-      username: "shubham",
-      password: "123",
-      fullName: "Owner Shubham",
-      isAdmin: true,
-      isApproved: true
-    },
-    { upsert: true, new: true }
-  );
-  console.log("Owner Account (shubham) is Verified and Ready.");
-}
-seedOwner();
+// Connect to DB
+mongoose.connect('mongodb://127.0.0.1:27017/socialMediaDB')
+  .then(() => console.log('✅ MongoDB Connected'))
+  .catch(err => console.error(err));
 
-// --- AUTH MIDDLEWARE ---
-const requireLogin = (req, res, next) => {
-  if (!req.session.userId) {
-     // If request is from React/API, send JSON error instead of redirecting
-     if(req.headers.accept && req.headers.accept.includes('application/json')) {
-         return res.status(401).json({ error: "Not logged in" });
-     }
-     return res.redirect('/login');
-  }
-  next();
-};
-
-const requireAdmin = (req, res, next) => {
-  if (!req.session.isAdmin) return res.redirect('/');
-  next();
-};
-
-// --- ROUTES ---
-
-// --- NEW API ROUTE FOR REACT ---
-app.get('/api/posts', async (req, res) => {
-  try {
-    const posts = await Post.find()
-      .populate('user', 'username') // optional: get author details if ref exists
-      .sort({ date: -1 });
-    res.json(posts);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+// Multer (Image Uploads)
+const storage = multer.diskStorage({
+  destination: './public/uploads/',
+  filename: (req, file, cb) => {
+    cb(null, 'post-' + Date.now() + path.extname(file.originalname));
   }
 });
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } }).single('image');
 
-// Login & Register
-app.get('/login', (req, res) => res.render('login', { error: null }));
+// --- 2. AUTH ROUTES ---
+
+// Check if I am already logged in (React calls this on load)
+app.get('/api/me', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ loggedIn: false });
+  res.json({ 
+    loggedIn: true, 
+    username: req.session.username, 
+    isAdmin: req.session.isAdmin,
+    userId: req.session.userId 
+  });
+});
+
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const user = await User.findOne({ username, password });
-  if (!user) return res.render('login', { error: "Invalid Username or Password." });
-  if (user.isApproved === false) return res.render('login', { error: "Account Pending! Wait for approval." });
+  
+  if (!user) return res.status(400).json({ error: "Invalid credentials" });
+  if (!user.isApproved) return res.status(403).json({ error: "Account pending approval" });
 
+  // Set Session
   req.session.userId = user._id;
   req.session.username = user.username;
   req.session.isAdmin = user.isAdmin;
-  
-  // If request is JSON (from React), send JSON response
-  if(req.xhr || req.headers.accept.indexOf('json') > -1){
-      return res.json({ success: true, user });
-  }
-  
-  res.redirect('/');
+
+  res.json({ success: true, user });
 });
 
-app.get('/register', (req, res) => res.render('register'));
 app.post('/register', async (req, res) => {
-  const { username, password, fullName, collegeId, mobile } = req.body;
+  const { username, password, fullName, mobile } = req.body;
   const existing = await User.findOne({ username });
-  if (existing) return res.send("Username taken.");
-  await User.create({ username, password, fullName, collegeId, mobile, isApproved: false, isAdmin: false });
-  res.render('login', { error: "Registration Successful! Please wait for Owner approval." });
+  if (existing) return res.status(400).json({ error: "Username taken" });
+
+  await User.create({ username, password, fullName, mobile, isApproved: false, isAdmin: false });
+  res.json({ success: true, message: "Registered! Wait for admin approval." });
 });
 
-app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
+app.post('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.clearCookie('connect.sid');
+    res.json({ success: true });
+  });
+});
 
-// --- CORE SOCIAL FEATURES ---
+// --- 3. POST ROUTES ---
 
-// 1. HOME (Legacy EJS View)
-app.get('/', requireLogin, async (req, res) => {
+// Get All Posts
+app.get('/api/posts', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
   const posts = await Post.find().sort({ date: -1 });
-  res.render('home', { 
-    posts, 
-    currentUser: req.session.username,
-    currentUserId: req.session.userId, 
-    isAdmin: req.session.isAdmin 
-  });
+  res.json(posts);
 });
 
-// 2. POSTING
-// 2. POSTING (Updated for React + JSON)
-app.get('/posting', requireLogin, (req, res) => res.render('posting'));
-
-app.post('/posting', requireLogin, (req, res) => {
+// Create Post
+app.post('/posting', (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+  
   upload(req, res, async (err) => {
-    if(err){ return res.status(500).json({ error: "Error uploading file." }); }
-    
-    try {
-        const newPost = await Post.create({
-          content: req.body.content,
-          image: req.file ? req.file.filename : null,
-          user: req.session.userId,
-          username: req.session.username
-        });
+    if (err) return res.status(500).json({ error: "Upload failed" });
 
-        // IF request asks for JSON (React), send the new post back
-        if(req.headers.accept && req.headers.accept.includes('application/json')) {
-            return res.json({ success: true, post: newPost });
-        }
-
-        // IF standard HTML form, redirect as usual
-        res.redirect('/');
-        
-    } catch (dbErr) {
-        res.status(500).json({ error: dbErr.message });
-    }
-  });
-});
-
-// 3. DELETE POST
-app.get('/delete/:id', requireLogin, async (req, res) => {
-  const post = await Post.findById(req.params.id);
-  if(req.session.isAdmin || post.user.toString() === req.session.userId){
-    await Post.findByIdAndDelete(req.params.id);
-  }
-  res.redirect('/'); 
-});
-
-// 4. LIKE POST (AJAX/JSON)
-app.get('/like/:id', requireLogin, async (req, res) => {
-  try {
-    const post = await Post.findById(req.params.id);
-    
-    if (post.likes.includes(req.session.userId)) {
-      post.likes.pull(req.session.userId);
-    } else {
-      post.likes.push(req.session.userId);
-    }
-    
-    await post.save();
-    res.json({ 
-      success: true, 
-      likesCount: post.likes.length, 
-      userLiked: post.likes.includes(req.session.userId) 
-    });
-
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 5. ADD COMMENT (AJAX/JSON)
-app.post('/comment/:id', requireLogin, async (req, res) => {
-  try {
-    const post = await Post.findById(req.params.id);
-    
-    const newComment = {
+    const newPost = await Post.create({
+      content: req.body.content,
+      image: req.file ? req.file.filename : null,
       user: req.session.userId,
       username: req.session.username,
-      text: req.body.text,
-      _id: new mongoose.Types.ObjectId()
-    };
-
-    post.comments.push(newComment);
-    await post.save();
-    
-    res.json({ success: true, comment: newComment });
-    
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 6. DELETE COMMENT
-app.get('/comment/:postId/:commentId/delete', requireLogin, async (req, res) => {
-  try {
-    const post = await Post.findById(req.params.postId);
-    const comment = post.comments.id(req.params.commentId);
-    
-    if (comment && (req.session.isAdmin || comment.user.toString() === req.session.userId)) {
-        post.comments.pull(req.params.commentId);
-        await post.save();
-    }
-    res.redirect('/'); 
-  } catch (err) {
-    console.log(err);
-    res.redirect('/');
-  }
-});
-
-// 7. PROFILE
-app.get('/profile', requireLogin, async (req, res) => {
-  const userPosts = await Post.find({ user: req.session.userId }).sort({ date: -1 });
-  res.render('profile', { 
-    posts: userPosts, 
-    currentUser: req.session.username,
-    currentUserId: req.session.userId,
-    isAdmin: req.session.isAdmin
+      likes: [],
+      comments: []
+    });
+    res.json({ success: true, post: newPost });
   });
 });
 
-// 8. ADMIN
-app.get('/admin', requireLogin, requireAdmin, async (req, res) => {
-  const pendingUsers = await User.find({ isApproved: false });
-  const activeUsers = await User.find({ isApproved: true, isAdmin: false });
-  res.render('admin', { pendingUsers, activeUsers });
+// Like Post
+app.get('/like/:id', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+  const post = await Post.findById(req.params.id);
+  
+  if (post.likes.includes(req.session.userId)) {
+    post.likes.pull(req.session.userId);
+  } else {
+    post.likes.push(req.session.userId);
+  }
+  await post.save();
+  res.json({ success: true, likes: post.likes, userLiked: post.likes.includes(req.session.userId) });
 });
 
-app.post('/admin/approve/:id', requireLogin, requireAdmin, async (req, res) => {
+// Comment
+app.post('/comment/:id', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+  const post = await Post.findById(req.params.id);
+  
+  const comment = {
+    user: req.session.userId,
+    username: req.session.username,
+    text: req.body.text,
+    _id: new mongoose.Types.ObjectId()
+  };
+  post.comments.push(comment);
+  await post.save();
+  res.json({ success: true, comment });
+});
+
+// Delete Post
+app.delete('/delete/:id', async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+    const post = await Post.findById(req.params.id);
+    
+    if (req.session.isAdmin || post.user.toString() === req.session.userId) {
+        await Post.findByIdAndDelete(req.params.id);
+        return res.json({ success: true });
+    }
+    res.status(403).json({ error: "Not allowed" });
+});
+
+// --- 4. ADMIN ROUTES ---
+app.get('/api/admin/users', async (req, res) => {
+  if (!req.session.isAdmin) return res.status(403).json({ error: "Admins only" });
+  
+  const pending = await User.find({ isApproved: false });
+  const active = await User.find({ isApproved: true, isAdmin: false });
+  res.json({ pending, active });
+});
+
+app.post('/api/admin/approve/:id', async (req, res) => {
+  if (!req.session.isAdmin) return res.status(403).json({ error: "Admins only" });
   await User.findByIdAndUpdate(req.params.id, { isApproved: true });
-  res.redirect('/admin');
+  res.json({ success: true });
 });
 
-app.listen(3000, () => console.log('Server running on http://localhost:3000'));
+app.listen(3000, () => console.log('🚀 Server running on Port 3000 (API Only)'));
