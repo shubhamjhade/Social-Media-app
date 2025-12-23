@@ -3,10 +3,17 @@ const mongoose = require('mongoose');
 const session = require('express-session');
 const multer = require('multer'); // Import Multer
 const path = require('path');
+const cors = require('cors'); // Import CORS
 const User = require('./models/user');
 const Post = require('./models/post');
 
 const app = express();
+
+// --- CORS CONFIGURATION (Connect React) ---
+app.use(cors({
+  origin: 'http://localhost:5173', // This is where React runs
+  credentials: true // Allow cookies/sessions between React and Node
+}));
 
 // --- DB CONNECTION ---
 mongoose.connect('mongodb://127.0.0.1:27017/socialMediaDB')
@@ -17,20 +24,21 @@ mongoose.connect('mongodb://127.0.0.1:27017/socialMediaDB')
 const storage = multer.diskStorage({
   destination: './public/uploads/',
   filename: function(req, file, cb){
-    // Save file as: fieldname-timestamp.jpg
     cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
   }
 });
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 10000000 }, // Limit 5MB
-}).single('image'); // Field name in form must be 'image'
+  limits: { fileSize: 10000000 }, // Limit 10MB
+}).single('image');
 
 // --- MIDDLEWARE ---
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public')); // This lets us serve the images
+app.use(express.json()); // IMPORTANT: Added to handle JSON data from React
+app.use(express.static('public')); 
+
 app.use(session({
   secret: 'supersecretkey',
   resave: false,
@@ -56,7 +64,13 @@ seedOwner();
 
 // --- AUTH MIDDLEWARE ---
 const requireLogin = (req, res, next) => {
-  if (!req.session.userId) return res.redirect('/login');
+  if (!req.session.userId) {
+     // If request is from React/API, send JSON error instead of redirecting
+     if(req.headers.accept && req.headers.accept.includes('application/json')) {
+         return res.status(401).json({ error: "Not logged in" });
+     }
+     return res.redirect('/login');
+  }
   next();
 };
 
@@ -67,7 +81,19 @@ const requireAdmin = (req, res, next) => {
 
 // --- ROUTES ---
 
-// Login & Register (Same as before)
+// --- NEW API ROUTE FOR REACT ---
+app.get('/api/posts', async (req, res) => {
+  try {
+    const posts = await Post.find()
+      .populate('user', 'username') // optional: get author details if ref exists
+      .sort({ date: -1 });
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Login & Register
 app.get('/login', (req, res) => res.render('login', { error: null }));
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
@@ -78,6 +104,12 @@ app.post('/login', async (req, res) => {
   req.session.userId = user._id;
   req.session.username = user.username;
   req.session.isAdmin = user.isAdmin;
+  
+  // If request is JSON (from React), send JSON response
+  if(req.xhr || req.headers.accept.indexOf('json') > -1){
+      return res.json({ success: true, user });
+  }
+  
   res.redirect('/');
 });
 
@@ -90,67 +122,72 @@ app.post('/register', async (req, res) => {
   res.render('login', { error: "Registration Successful! Please wait for Owner approval." });
 });
 
-// Logout
 app.get('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
 
 // --- CORE SOCIAL FEATURES ---
 
-// 1. HOME (Updated to pass user ID for likes/delete logic)
+// 1. HOME (Legacy EJS View)
 app.get('/', requireLogin, async (req, res) => {
   const posts = await Post.find().sort({ date: -1 });
   res.render('home', { 
     posts, 
     currentUser: req.session.username,
-    currentUserId: req.session.userId, // Needed to check if I liked a post
+    currentUserId: req.session.userId, 
     isAdmin: req.session.isAdmin 
   });
 });
 
-// 2. POSTING (Updated with Multer Middleware)
+// 2. POSTING
+// 2. POSTING (Updated for React + JSON)
 app.get('/posting', requireLogin, (req, res) => res.render('posting'));
 
 app.post('/posting', requireLogin, (req, res) => {
   upload(req, res, async (err) => {
-    if(err){ return res.send("Error uploading file."); }
+    if(err){ return res.status(500).json({ error: "Error uploading file." }); }
     
-    await Post.create({
-      content: req.body.content,
-      image: req.file ? req.file.filename : null, // Save filename if exists
-      user: req.session.userId,
-      username: req.session.username
-    });
-    res.redirect('/');
+    try {
+        const newPost = await Post.create({
+          content: req.body.content,
+          image: req.file ? req.file.filename : null,
+          user: req.session.userId,
+          username: req.session.username
+        });
+
+        // IF request asks for JSON (React), send the new post back
+        if(req.headers.accept && req.headers.accept.includes('application/json')) {
+            return res.json({ success: true, post: newPost });
+        }
+
+        // IF standard HTML form, redirect as usual
+        res.redirect('/');
+        
+    } catch (dbErr) {
+        res.status(500).json({ error: dbErr.message });
+    }
   });
 });
 
-// 3. DELETE POST (Owner can delete ALL, User can delete OWN)
+// 3. DELETE POST
 app.get('/delete/:id', requireLogin, async (req, res) => {
   const post = await Post.findById(req.params.id);
-  
-  // Security Check: Only allow if Owner OR Author
   if(req.session.isAdmin || post.user.toString() === req.session.userId){
     await Post.findByIdAndDelete(req.params.id);
   }
-  
-  // Redirect back to where they came from
   res.redirect('/'); 
 });
 
-// 4. LIKE POST (Updated for AJAX - No Refresh)
+// 4. LIKE POST (AJAX/JSON)
 app.get('/like/:id', requireLogin, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     
-    // Toggle Logic
     if (post.likes.includes(req.session.userId)) {
-      post.likes.pull(req.session.userId); // Unlike
+      post.likes.pull(req.session.userId);
     } else {
-      post.likes.push(req.session.userId); // Like
+      post.likes.push(req.session.userId);
     }
     
     await post.save();
-
-    // INSTEAD OF REDIRECT, WE SEND JSON DATA
     res.json({ 
       success: true, 
       likesCount: post.likes.length, 
@@ -161,23 +198,22 @@ app.get('/like/:id', requireLogin, async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-// 5. ADD COMMENT (Updated for AJAX - No Refresh)
+
+// 5. ADD COMMENT (AJAX/JSON)
 app.post('/comment/:id', requireLogin, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     
-    // Create comment object
     const newComment = {
       user: req.session.userId,
       username: req.session.username,
       text: req.body.text,
-      _id: new mongoose.Types.ObjectId() // Generate ID immediately
+      _id: new mongoose.Types.ObjectId()
     };
 
     post.comments.push(newComment);
     await post.save();
     
-    // Send back the new comment data as JSON
     res.json({ success: true, comment: newComment });
     
   } catch (err) {
@@ -185,27 +221,23 @@ app.post('/comment/:id', requireLogin, async (req, res) => {
   }
 });
 
-// 6. DELETE COMMENT ROUTE
+// 6. DELETE COMMENT
 app.get('/comment/:postId/:commentId/delete', requireLogin, async (req, res) => {
   try {
     const post = await Post.findById(req.params.postId);
-    
-    // Find the comment inside the post
     const comment = post.comments.id(req.params.commentId);
     
-    // Check Permission: Admin OR Comment Author can delete
     if (comment && (req.session.isAdmin || comment.user.toString() === req.session.userId)) {
-        // Remove the comment
         post.comments.pull(req.params.commentId);
         await post.save();
     }
-    
-    res.redirect('/'); // Reloads page (Deleting usually needs a reload to clean up properly)
+    res.redirect('/'); 
   } catch (err) {
     console.log(err);
     res.redirect('/');
   }
 });
+
 // 7. PROFILE
 app.get('/profile', requireLogin, async (req, res) => {
   const userPosts = await Post.find({ user: req.session.userId }).sort({ date: -1 });
@@ -223,6 +255,7 @@ app.get('/admin', requireLogin, requireAdmin, async (req, res) => {
   const activeUsers = await User.find({ isApproved: true, isAdmin: false });
   res.render('admin', { pendingUsers, activeUsers });
 });
+
 app.post('/admin/approve/:id', requireLogin, requireAdmin, async (req, res) => {
   await User.findByIdAndUpdate(req.params.id, { isApproved: true });
   res.redirect('/admin');

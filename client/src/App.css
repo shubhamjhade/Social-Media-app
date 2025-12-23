@@ -1,0 +1,23 @@
+body { margin: 0; font-family: sans-serif; background-color: #f0f2f5; }
+.navbar { background: white; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
+.app-container { min-height: 100vh; }
+.feed { max-width: 600px; margin: 20px auto; padding: 0 20px; }
+
+.post-card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.post-author { margin: 0 0 10px 0; color: #1877f2; }
+.post-image { width: 100%; border-radius: 8px; margin-top: 10px; }
+.post-actions { margin-top: 10px; font-weight: bold; color: #555; }
+
+.comments-section { margin-top: 15px; background: #f9f9f9; padding: 10px; border-radius: 5px; }
+.comment { font-size: 14px; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+
+/* Create Post Box */
+.create-post-box { padding: 20px; }
+.create-post-box h3 { margin-top: 0; color: #555; }
+
+.create-input { width: 95%; height: 60px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; resize: none; outline: none; display: block; margin-bottom: 10px; }
+.create-input:focus { border-color: #1877f2; }
+
+.file-upload-area { display: flex; justify-content: space-between; align-items: center; }
+.post-btn { background: #1877f2; color: white; border: none; padding: 8px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+.post-btn:hover { background: #155db5; }
