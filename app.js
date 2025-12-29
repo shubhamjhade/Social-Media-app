@@ -175,6 +175,52 @@ app.post('/api/admin/approve/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+// ====> PASTE THIS RIGHT BEFORE app.listen <====
 
+// Delete User Route (Admin Only)
+app.delete('/api/admin/user/:id', async (req, res) => {
+  if (!req.session.isAdmin) return res.status(403).json({ error: "Admins only" });
+  try {
+      // 1. Delete the user
+      await User.findByIdAndDelete(req.params.id);
+      
+      // 2. Delete all posts made by this user (Cleanup)
+      await Post.deleteMany({ user: req.params.id }); 
+      
+      res.json({ success: true });
+  } catch (err) {
+      console.error("Delete Error:", err);
+      res.status(500).json({ error: err.message });
+  }
+});
 
+// --- UPDATE PROFILE ROUTE ---
+app.put('/api/user/update', async (req, res) => {
+  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const { username, mobile } = req.body;
+
+  try {
+      // 1. If username is changing, check if the new one is already taken
+      if (username !== req.session.username) {
+          const existing = await User.findOne({ username });
+          if (existing) return res.status(400).json({ error: "Username already taken." });
+      }
+
+      // 2. Update the user in the database
+      const updatedUser = await User.findByIdAndUpdate(
+          req.session.userId, 
+          { username, mobile }, 
+          { new: true } // Return the updated document
+      );
+
+      // 3. Update the session with the new username
+      req.session.username = updatedUser.username;
+
+      res.json({ success: true, user: updatedUser });
+
+  } catch (err) {
+      res.status(500).json({ error: err.message });
+  }
+});
 app.listen(3000, () => console.log('🚀 Server running on Port 3000 (API Only)'));
