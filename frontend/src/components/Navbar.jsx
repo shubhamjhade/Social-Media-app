@@ -15,7 +15,7 @@ function Navbar({ user, setUser }) {
       {/* Logo + Text Container */}
       <Link to="/" className="logo-link">
         <img src={logo} alt="CampusXceptions Logo" className="navbar-logo" />
-        <span className="logo-text">CampusXEceptions</span>
+        <span className="logo-text">CampusXceptions</span>
       </Link>
 
       <div className="nav-links">

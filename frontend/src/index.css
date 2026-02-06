@@ -1,17 +1,201 @@
-body { font-family: sans-serif; background: #f0f2f5; margin: 0; }
-.navbar { background: white; padding: 15px; display: flex; justify-content: space-between; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-.navbar a { text-decoration: none; color: #333; margin-right: 15px; font-weight: bold; }
-.logout-btn { background: none; border: none; color: red; cursor: pointer; font-weight: bold; }
+/* =========================================
+   INNOVATION LAB - DARK CYBERPUNK THEME
+   (Cyberpunk / Modern Dark UI)
+========================================= */
 
-.app-container { min-height: 100vh; }
-.auth-box { max-width: 300px; margin: 50px auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
-.auth-box input { display: block; width: 90%; margin: 10px auto; padding: 10px; }
-.auth-box button { width: 100%; padding: 10px; background: #1877f2; color: white; border: none; cursor: pointer; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-.feed { max-width: 500px; margin: 20px auto; }
-.post-card { background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.post-header { display: flex; justify-content: space-between; color: #1877f2; margin-bottom: 10px; }
-.post-img { width: 100%; border-radius: 8px; margin-top: 10px; }
-.delete-btn { background: none; border: none; cursor: pointer; }
+:root {
+  /* DARK PALETTE */
+  --bg-main: #0a0a0a;          /* Deepest Black */
+  --bg-card: #141414;          /* Card Background */
+  --bg-input: #1f1f22;         /* Input Fields */
+  --border-color: #27272a;     /* Subtle Borders */
+  
+  /* TEXT */
+  --text-primary: #ffffff;     /* Headings */
+  --text-secondary: #a1a1aa;   /* Body text */
+  --text-muted: #52525b;       /* Placeholders */
 
-.create-box textarea { width: 95%; height: 60px; padding: 10px; margin-bottom: 10px; }
+  /* ACCENTS */
+  --primary-color: #6366f1;    /* Indigo/Purple Accent */
+  --primary-hover: #4f46e5;
+  --danger-color: #ef4444;     /* Red */
+  
+  /* SHADOWS */
+  --glow-shadow: 0 0 20px rgba(99, 102, 241, 0.15); 
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+}
+
+/* --- 1. GLOBAL RESET --- */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-main) !important;
+  background-image: none !important; 
+  color: var(--text-primary) !important;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+a { text-decoration: none; color: inherit; transition: 0.2s; }
+ul { list-style: none; padding: 0; margin: 0; }
+
+/* --- 2. NAVBAR (Dark Glass) --- */
+.navbar {
+  background-color: rgba(10, 10, 10, 0.8) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color);
+  padding: 15px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: none !important;
+}
+
+.logo-text {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary) !important;
+  letter-spacing: -0.5px;
+  background: linear-gradient(90deg, #fff, #a1a1aa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.nav-links a {
+  color: var(--text-secondary) !important;
+  font-size: 14px;
+  font-weight: 500;
+}
+.nav-links a:hover { color: white !important; }
+
+.logout-btn {
+  background: transparent !important;
+  color: var(--danger-color) !important;
+  border: 1px solid var(--border-color) !important;
+}
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: var(--danger-color) !important;
+}
+
+/* --- 3. LAYOUT --- */
+.app-container { min-height: 100vh; display: flex; flex-direction: column; }
+.feed { max-width: 700px; margin: 40px auto; padding: 0 20px; width: 100%; }
+
+/* --- 4. ALL CARDS (Post, Auth, Profile) --- */
+.post-card, .auth-box, .profile-header-card, .create-box, .admin-card {
+  background-color: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--card-shadow) !important;
+  color: var(--text-primary) !important;
+  margin-bottom: 25px;
+  overflow: hidden;
+}
+
+/* --- 5. FORMS & INPUTS --- */
+input, textarea, .create-input, .edit-input {
+  background-color: var(--bg-input) !important;
+  border: 1px solid var(--border-color) !important;
+  color: white !important;
+  border-radius: 8px !important;
+  padding: 12px !important;
+  outline: none;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* --- 6. BUTTONS --- */
+button, .post-btn, .save-btn, .approve-btn {
+  background-color: var(--primary-color) !important;
+  color: white !important;
+  border: none !important;
+  padding: 10px 20px !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+button:hover, .post-btn:hover {
+  background-color: var(--primary-hover) !important;
+  box-shadow: var(--glow-shadow);
+  transform: translateY(-1px);
+}
+
+/* --- 7. AUTH BOX SPECIFIC --- */
+.auth-box {
+  max-width: 400px;
+  margin: 80px auto;
+  padding: 40px;
+  text-align: center;
+}
+.auth-box h2 { color: white !important; }
+.auth-box a { color: var(--primary-color) !important; }
+
+/* --- 8. POST FEED SPECIFIC --- */
+.post-header { padding: 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+.avatar, .profile-avatar-large {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+  color: white !important;
+  border: none !important;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.delete-btn {
+  background: none !important;
+  color: var(--text-muted) !important;
+  padding: 0 !important;
+}
+.delete-btn:hover { color: var(--danger-color) !important; }
+
+.post-text { color: #e4e4e7 !important; padding: 20px !important; }
+
+/* --- 9. ACTIONS & COMMENTS --- */
+.actions { border-top: 1px solid var(--border-color); padding: 10px 20px; }
+
+.btn-like {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+.btn-like:hover { background: rgba(255,255,255,0.05) !important; color: white !important; }
+
+.comments-section { background: #0f0f10 !important; }
+.comment-item {
+  background: var(--bg-input) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+.comment-user { color: white !important; font-weight: 700; }
+
+/* --- 10. PROFILE & ADMIN --- */
+.profile-stats {
+  background: var(--bg-input) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border-color);
+}
+
+.edit-btn {
+  background: transparent !important;
+  border: 1px solid var(--border-color) !important;
+  color: white !important;
+}
+.edit-btn:hover { background: white !important; color: black !important; }
+
+.reject-btn { background-color: var(--danger-color) !important; margin-left: 10px; }
+.delete-user-btn { 
+  background-color: transparent !important; 
+  border: 1px solid var(--danger-color) !important; 
+  color: var(--danger-color) !important; 
+}
