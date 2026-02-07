@@ -68,9 +68,11 @@ const threadPostSchema = new mongoose.Schema({
     image: String,
     username: String,
     userId: String,
+    likes: [String], // <--- NEW: Stores who liked the post
     createdAt: { type: Date, default: Date.now }
 });
 const ThreadPost = mongoose.models.ThreadPost || mongoose.model("ThreadPost", threadPostSchema);
+
 
 // --- ROUTES ---
 
@@ -215,6 +217,29 @@ app.get('/api/nuke', async (req, res) => {
     await User.deleteMany({}); await Post.deleteMany({}); await Thread.deleteMany({}); await ThreadPost.deleteMany({});
     req.session.destroy();
     res.send("💥 Database Wiped Successfully!");
+});
+
+// Toggle Like on a Thread Post
+app.get('/api/threads/posts/:id/like', async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
+    
+    try {
+        const post = await ThreadPost.findById(req.params.id);
+        
+        // Defensive check: ensure likes array exists
+        if (!post.likes) post.likes = [];
+
+        if (post.likes.includes(req.session.userId)) {
+            post.likes.pull(req.session.userId); // Unlike
+        } else {
+            post.likes.push(req.session.userId); // Like
+        }
+        
+        await post.save();
+        res.json({ success: true, likes: post.likes });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.listen(3000, () => console.log('🚀 Server running on Port 3000'));
