@@ -17,10 +17,10 @@ function Navbar({ user, setUser }) {
   return (
     <>
       <header className="main-header">
-        {/* LEFT: Brand */}
+        {/* BRAND */}
         <div className="header-brand">CampusXceptions</div>
 
-        {/* RIGHT (Desktop): Links & Logout */}
+        {/* DESKTOP NAV */}
         <nav className="desktop-nav">
           <Link to="/" className={isActive('/')}>Home</Link>
           <Link to="/profile" className={isActive('/profile')}>Profile</Link>
@@ -28,13 +28,13 @@ function Navbar({ user, setUser }) {
           <button onClick={handleLogout} className="header-logout">Logout</button>
         </nav>
 
-        {/* RIGHT (Mobile): Hamburger */}
+        {/* MOBILE HAMBURGER */}
         <button className="hamburger-btn" onClick={() => setMenuOpen(!menuOpen)}>
            {menuOpen ? "✕" : "☰"}
         </button>
       </header>
 
-      {/* MOBILE DROPDOWN */}
+      {/* MOBILE MENU */}
       <div className={`mobile-menu ${menuOpen ? 'open' : ''}`}>
           <Link to="/" className="mobile-link" onClick={()=>setMenuOpen(false)}>Home</Link>
           <Link to="/profile" className="mobile-link" onClick={()=>setMenuOpen(false)}>Profile</Link>
