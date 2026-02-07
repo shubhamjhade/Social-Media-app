@@ -4,155 +4,143 @@ const session = require('express-session');
 const multer = require('multer');
 const path = require('path');
 const cors = require('cors');
-const User = require('./models/user');
-const Post = require('./models/post');
 
 const app = express();
 
 // --- 1. CONFIGURATION ---
-// Allow React (Port 5173) to send cookies and requests
-app.use(cors({
-  origin: 'http://localhost:5173',
-  credentials: true
-}));
-
-app.use(express.json()); // Handle JSON data
+app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public')); // Serve uploaded images
+app.use(express.static('public'));
 
-// Session Setup (The "Cookie")
 app.use(session({
   secret: 'supersecretkey',
   resave: false,
   saveUninitialized: false,
-  cookie: { 
-    secure: false, // Set to true if using HTTPS
-    httpOnly: true, 
-    maxAge: 1000 * 60 * 60 * 24 // 1 Day
-  }
+  cookie: { secure: false, httpOnly: true, maxAge: 1000 * 60 * 60 * 24 }
 }));
 
-// Connect to DB
 mongoose.connect('mongodb://127.0.0.1:27017/socialMediaDB')
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error(err));
 
-// Multer (Image Uploads)
+// --- MULTER ---
 const storage = multer.diskStorage({
   destination: './public/uploads/',
-  filename: (req, file, cb) => {
-    cb(null, 'post-' + Date.now() + path.extname(file.originalname));
-  }
+  filename: (req, file, cb) => cb(null, 'file-' + Date.now() + path.extname(file.originalname))
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } }).single('image');
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
-// --- 2. AUTH ROUTES ---
+// --- SCHEMAS ---
+const userSchema = new mongoose.Schema({
+    username: { type: String, unique: true, required: true },
+    password: { type: String, required: true },
+    fullName: String,
+    mobile: String,
+    isAdmin: { type: Boolean, default: false },
+    isApproved: { type: Boolean, default: false }
+});
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
-// Check if I am already logged in (React calls this on load)
+const postSchema = new mongoose.Schema({
+    content: String,
+    image: String,
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    username: String,
+    likes: [String],
+    comments: [{ user: String, username: String, text: String, _id: String }],
+    date: { type: Date, default: Date.now }
+});
+const Post = mongoose.models.Post || mongoose.model("Post", postSchema);
+
+// --- SIMPLIFIED THREAD SCHEMA (Open to All) ---
+const threadSchema = new mongoose.Schema({
+    title: String,
+    username: String,
+    userId: String,
+    createdAt: { type: Date, default: Date.now }
+});
+const Thread = mongoose.models.Thread || mongoose.model("Thread", threadSchema);
+
+const threadPostSchema = new mongoose.Schema({
+    threadId: String,
+    content: String,
+    image: String,
+    username: String,
+    userId: String,
+    createdAt: { type: Date, default: Date.now }
+});
+const ThreadPost = mongoose.models.ThreadPost || mongoose.model("ThreadPost", threadPostSchema);
+
+// --- ROUTES ---
+
+// Auth
 app.get('/api/me', async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ loggedIn: false });
-  res.json({ 
-    loggedIn: true, 
-    username: req.session.username, 
-    isAdmin: req.session.isAdmin,
-    userId: req.session.userId 
-  });
+  res.json({ loggedIn: true, username: req.session.username, isAdmin: req.session.isAdmin, userId: req.session.userId });
 });
 
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const user = await User.findOne({ username, password });
-  
   if (!user) return res.status(400).json({ error: "Invalid credentials" });
   if (!user.isApproved) return res.status(403).json({ error: "Account pending approval" });
-
-  // Set Session
-  req.session.userId = user._id;
-  req.session.username = user.username;
-  req.session.isAdmin = user.isAdmin;
-
+  req.session.userId = user._id; req.session.username = user.username; req.session.isAdmin = user.isAdmin;
   res.json({ success: true, user });
 });
 
 app.post('/register', async (req, res) => {
   const { username, password, fullName, mobile } = req.body;
-  const existing = await User.findOne({ username });
-  if (existing) return res.status(400).json({ error: "Username taken" });
-
-  await User.create({ username, password, fullName, mobile, isApproved: false, isAdmin: false });
-  res.json({ success: true, message: "Registered! Wait for admin approval." });
+  if (await User.findOne({ username })) return res.status(400).json({ error: "Username taken" });
+  await User.create({ username, password, fullName, mobile });
+  res.json({ success: true });
 });
 
 app.post('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie('connect.sid');
-    res.json({ success: true });
-  });
+  req.session.destroy(() => { res.clearCookie('connect.sid'); res.json({ success: true }); });
 });
 
-// --- 3. POST ROUTES ---
-
-// Get All Posts
+// Posts
 app.get('/api/posts', async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
-  const posts = await Post.find().sort({ date: -1 });
-  res.json(posts);
+  res.json(await Post.find().sort({ date: -1 }));
 });
 
-// Create Post
 app.post('/posting', (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
-  
-  upload(req, res, async (err) => {
+  upload.single('image')(req, res, async (err) => {
     if (err) return res.status(500).json({ error: "Upload failed" });
-
     const newPost = await Post.create({
       content: req.body.content,
       image: req.file ? req.file.filename : null,
       user: req.session.userId,
       username: req.session.username,
-      likes: [],
-      comments: []
+      likes: [], comments: []
     });
     res.json({ success: true, post: newPost });
   });
 });
 
-// Like Post
 app.get('/like/:id', async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
   const post = await Post.findById(req.params.id);
-  
-  if (post.likes.includes(req.session.userId)) {
-    post.likes.pull(req.session.userId);
-  } else {
-    post.likes.push(req.session.userId);
-  }
+  if (post.likes.includes(req.session.userId)) post.likes.pull(req.session.userId);
+  else post.likes.push(req.session.userId);
   await post.save();
-  res.json({ success: true, likes: post.likes, userLiked: post.likes.includes(req.session.userId) });
+  res.json({ success: true, likes: post.likes });
 });
 
-// Comment
 app.post('/comment/:id', async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
   const post = await Post.findById(req.params.id);
-  
-  const comment = {
-    user: req.session.userId,
-    username: req.session.username,
-    text: req.body.text,
-    _id: new mongoose.Types.ObjectId()
-  };
-  post.comments.push(comment);
+  post.comments.push({ user: req.session.userId, username: req.session.username, text: req.body.text, _id: new mongoose.Types.ObjectId() });
   await post.save();
-  res.json({ success: true, comment });
+  res.json({ success: true, comment: post.comments[post.comments.length - 1] });
 });
 
-// Delete Post
 app.delete('/delete/:id', async (req, res) => {
     if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
     const post = await Post.findById(req.params.id);
-    
     if (req.session.isAdmin || post.user.toString() === req.session.userId) {
         await Post.findByIdAndDelete(req.params.id);
         return res.json({ success: true });
@@ -160,13 +148,10 @@ app.delete('/delete/:id', async (req, res) => {
     res.status(403).json({ error: "Not allowed" });
 });
 
-// --- 4. ADMIN ROUTES ---
+// Admin
 app.get('/api/admin/users', async (req, res) => {
   if (!req.session.isAdmin) return res.status(403).json({ error: "Admins only" });
-  
-  const pending = await User.find({ isApproved: false });
-  const active = await User.find({ isApproved: true, isAdmin: false });
-  res.json({ pending, active });
+  res.json({ pending: await User.find({ isApproved: false }), active: await User.find({ isApproved: true, isAdmin: false }) });
 });
 
 app.post('/api/admin/approve/:id', async (req, res) => {
@@ -175,52 +160,61 @@ app.post('/api/admin/approve/:id', async (req, res) => {
   res.json({ success: true });
 });
 
-// ====> PASTE THIS RIGHT BEFORE app.listen <====
-
-// Delete User Route (Admin Only)
 app.delete('/api/admin/user/:id', async (req, res) => {
   if (!req.session.isAdmin) return res.status(403).json({ error: "Admins only" });
-  try {
-      // 1. Delete the user
-      await User.findByIdAndDelete(req.params.id);
-      
-      // 2. Delete all posts made by this user (Cleanup)
-      await Post.deleteMany({ user: req.params.id }); 
-      
-      res.json({ success: true });
-  } catch (err) {
-      console.error("Delete Error:", err);
-      res.status(500).json({ error: err.message });
-  }
+  await User.findByIdAndDelete(req.params.id);
+  await Post.deleteMany({ user: req.params.id });
+  res.json({ success: true });
 });
 
-// --- UPDATE PROFILE ROUTE ---
+// User Update
 app.put('/api/user/update', async (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });
-
   const { username, mobile } = req.body;
-
-  try {
-      // 1. If username is changing, check if the new one is already taken
-      if (username !== req.session.username) {
-          const existing = await User.findOne({ username });
-          if (existing) return res.status(400).json({ error: "Username already taken." });
-      }
-
-      // 2. Update the user in the database
-      const updatedUser = await User.findByIdAndUpdate(
-          req.session.userId, 
-          { username, mobile }, 
-          { new: true } // Return the updated document
-      );
-
-      // 3. Update the session with the new username
-      req.session.username = updatedUser.username;
-
-      res.json({ success: true, user: updatedUser });
-
-  } catch (err) {
-      res.status(500).json({ error: err.message });
-  }
+  const updatedUser = await User.findByIdAndUpdate(req.session.userId, { username, mobile }, { new: true });
+  req.session.username = updatedUser.username;
+  res.json({ success: true, user: updatedUser });
 });
-app.listen(3000, () => console.log('🚀 Server running on Port 3000 (API Only)'));
+
+// --- THREADS (OPEN TO ALL) ---
+
+// Create
+app.post("/api/threads", async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ success: false });
+    const newThread = new Thread({ title: req.body.title, username: req.session.username, userId: req.session.userId });
+    await newThread.save();
+    res.json({ success: true, thread: newThread });
+});
+
+// Get All
+app.get("/api/threads", async (req, res) => {
+    res.json(await Thread.find().sort({ createdAt: -1 }));
+});
+
+// Post in Thread
+app.post("/api/threads/:id/posts", upload.single("image"), async (req, res) => {
+    if (!req.session.userId) return res.status(401).json({ success: false });
+    const newPost = new ThreadPost({
+        threadId: req.params.id,
+        content: req.body.content,
+        image: req.file ? req.file.filename : null,
+        username: req.session.username,
+        userId: req.session.userId
+    });
+    await newPost.save();
+    res.json({ success: true, post: newPost });
+});
+
+// Get Thread Posts
+app.get("/api/threads/:id/posts", async (req, res) => {
+    res.json(await ThreadPost.find({ threadId: req.params.id }).sort({ createdAt: -1 }));
+});
+
+// Reset DB
+app.get('/api/nuke', async (req, res) => {
+    await User.deleteMany({}); await Post.deleteMany({}); await Thread.deleteMany({}); await ThreadPost.deleteMany({});
+    req.session.destroy();
+    res.send("💥 Database Wiped Successfully!");
+});
+
+app.listen(3000, () => console.log('🚀 Server running on Port 3000'));

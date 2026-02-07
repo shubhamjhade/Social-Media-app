@@ -355,3 +355,60 @@ button { font-family: inherit; }
   .auth-card { padding: 30px; }
   .card-panel { padding: 24px; }
 }
+
+/* ================= THREADS UI ================= */
+
+/* 1. The Toggle Switch (Below Navbar) */
+.nav-tabs {
+  display: flex; justify-content: center; gap: 20px;
+  margin-bottom: 30px;
+}
+.tab-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #94a3b8;
+  padding: 12px 40px;
+  border-radius: 100px;
+  font-size: 16px; font-weight: 700;
+  cursor: pointer; transition: 0.3s;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.tab-btn.active {
+  background: var(--grad-primary);
+  color: white;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+  border-color: transparent;
+  transform: scale(1.05);
+}
+
+/* 2. Thread Topic Card */
+.thread-card {
+  background: var(--card-bg);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-left: 4px solid #00f2ff; /* Cyan Accent */
+  border-radius: 20px;
+  padding: 25px;
+  margin-bottom: 20px;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: 0.3s;
+}
+.thread-card:hover {
+  transform: translateX(5px);
+  background: rgba(255,255,255,0.03);
+  box-shadow: 0 0 30px rgba(0, 242, 255, 0.1);
+}
+
+.thread-info h3 { margin: 0 0 5px 0; font-size: 18px; color: white; }
+.thread-info span { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+
+.enter-btn {
+  background: rgba(0, 242, 255, 0.15);
+  color: #00f2ff;
+  border: 1px solid #00f2ff;
+  padding: 10px 20px;
+  border-radius: 50px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.enter-btn:hover { background: #00f2ff; color: black; box-shadow: 0 0 20px #00f2ff; }

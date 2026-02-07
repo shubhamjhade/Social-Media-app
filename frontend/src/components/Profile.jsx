@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 
 function Profile({ user, setUser }) {
-  const [posts, setPosts] = useState([]);
+  const [activeTab, setActiveTab] = useState("posts");
+  const [myPosts, setMyPosts] = useState([]);
+  const [myThreads, setMyThreads] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ username: user.username || "", mobile: user.mobile || "" });
 
@@ -9,11 +11,13 @@ function Profile({ user, setUser }) {
     fetch("http://localhost:3000/api/posts", { credentials: "include" })
       .then(res => res.json())
       .then(data => {
-        // Robust filtering for user posts
-        const myPosts = data.filter(p => 
-            (p.userId === user.userId) || (p.user === user.userId) || p.username === user.username
-        );
-        setPosts(myPosts.reverse());
+        setMyPosts(data.filter(p => p.userId === user.userId || p.username === user.username).reverse());
+      });
+
+    fetch("http://localhost:3000/api/threads", { credentials: "include" })
+      .then(res => res.json())
+      .then(data => {
+        setMyThreads(data.filter(t => t.userId === user.userId));
       });
   }, [user]);
 
@@ -26,15 +30,8 @@ function Profile({ user, setUser }) {
     if(data.success) { setUser(data.user); setIsEditing(false); }
   };
 
-  const handleDelete = async (id) => {
-    if(!window.confirm("Delete?")) return;
-    await fetch(`http://localhost:3000/delete/${id}`, { method: "DELETE", credentials: "include" });
-    setPosts(posts.filter(p => p._id !== id));
-  };
-
   return (
-     <div className="card-panel" style={{textAlign:'center'}}>
-        {/* Avatar */}
+     <div className="card-panel" style={{textAlign:'center', minHeight:'600px'}}>
         <div className="user-avatar" style={{width:'80px', height:'80px', margin:'0 auto 20px', fontSize:'32px'}}>
             {user.username ? user.username[0].toUpperCase() : "U"}
         </div>
@@ -54,23 +51,34 @@ function Profile({ user, setUser }) {
             </>
         )}
 
-        <div style={{marginTop:'40px', borderTop:'1px solid rgba(255,255,255,0.1)', paddingTop:'20px'}}>
-            <h3 style={{textAlign:'left', color:'#e0f2fe'}}>My Activity</h3>
-            {posts.map(post => (
-                <div key={post._id} style={{textAlign:'left', marginTop:'20px', background:'rgba(0,0,0,0.2)', padding:'15px', borderRadius:'16px'}}>
-                    <div className="post-header-row">
-                         <div className="user-group">
-                            <div className="user-avatar" style={{width:'40px', height:'40px', fontSize:'16px'}}>
-                                {post.username[0].toUpperCase()}
-                            </div>
-                            <span style={{color:'white', fontWeight:'700'}}>@{post.username}</span>
-                         </div>
-                         <button onClick={() => handleDelete(post._id)} className="delete-btn">🗑️</button>
-                    </div>
-                    <p className="post-content">{post.content}</p>
-                    {post.image && <img src={`http://localhost:3000/uploads/${post.image}`} className="post-image" alt="Post"/>}
+        <div className="nav-tabs" style={{marginTop:'40px', gap:'10px'}}>
+             <button className={`tab-btn ${activeTab === 'posts' ? 'active' : ''}`} onClick={()=>setActiveTab('posts')} style={{padding:'10px 20px', fontSize:'13px'}}>Posts</button>
+             <button className={`tab-btn ${activeTab === 'threads' ? 'active' : ''}`} onClick={()=>setActiveTab('threads')} style={{padding:'10px 20px', fontSize:'13px'}}>My Threads</button>
+        </div>
+
+        <div style={{marginTop:'20px', textAlign:'left'}}>
+            {activeTab === 'posts' && (
+                <div>
+                    {myPosts.length === 0 && <p style={{textAlign:'center', color:'#555'}}>No posts yet.</p>}
+                    {myPosts.map(post => (
+                        <div key={post._id} style={{marginBottom:'15px', background:'rgba(255,255,255,0.03)', padding:'15px', borderRadius:'12px', border:'1px solid rgba(255,255,255,0.05)'}}>
+                            <p style={{margin:0, color:'#ccc'}}>{post.content}</p>
+                        </div>
+                    ))}
                 </div>
-            ))}
+            )}
+
+            {activeTab === 'threads' && (
+                <div>
+                    {myThreads.length === 0 && <p style={{textAlign:'center', color:'#555'}}>No threads created.</p>}
+                    {myThreads.map(thread => (
+                        <div key={thread._id} style={{marginBottom:'15px', background:'rgba(0, 242, 255, 0.05)', padding:'15px', borderRadius:'12px', border:'1px solid rgba(0, 242, 255, 0.2)'}}>
+                            <h4 style={{margin:'0 0 5px', color:'#00f2ff'}}>{thread.title}</h4>
+                            <span style={{fontSize:'12px', color:'#888'}}>Open Discussion</span>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
      </div>
   );
