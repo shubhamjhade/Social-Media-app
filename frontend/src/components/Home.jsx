@@ -2,167 +2,184 @@ import { useEffect, useState, useRef } from "react";
 
 function Home({ user }) {
   const [posts, setPosts] = useState([]);
-  const [newContent, setNewContent] = useState("");
-  const [newImage, setNewImage] = useState(null);
+  const [content, setContent] = useState("");
+  const [image, setImage] = useState(null);
   
-  // NEW: Store text for comment inputs. Key = postId, Value = text
-  const [commentTexts, setCommentTexts] = useState({}); 
+  // State for inputs and visibility
+  const [commentText, setCommentText] = useState({});
+  const [activeCommentBox, setActiveCommentBox] = useState({});
   
-  const fileInputRef = useRef(null);
+  const fileRef = useRef(null);
 
-  // 1. Fetch Posts
+  // Fetch Posts
   useEffect(() => {
     fetch("http://localhost:3000/api/posts", { credentials: "include" })
       .then(res => res.json())
       .then(data => setPosts(data))
-      .catch(err => console.error(err));
+      .catch(err => console.error("Error fetching posts:", err));
   }, []);
 
-  // 2. Create Post Logic
-  const handleCreatePost = async (e) => {
+  // --- HANDLE POST ---
+  const handlePost = async (e) => {
     e.preventDefault();
-    if (!newContent && !newImage) return;
+    if(!content && !image) return;
+    
+    const form = new FormData();
+    form.append("content", content);
+    if(image) form.append("image", image);
+    
+    try {
+        const res = await fetch("http://localhost:3000/posting", { method: "POST", credentials: "include", body: form });
+        const data = await res.json();
+        if(data.success) {
+           // Safely add new post to top of list
+           setPosts([{...data.post, likes: [], comments: []}, ...posts]);
+           setContent(""); setImage(null); fileRef.current.value = "";
+        }
+    } catch(err) { console.error(err); }
+  };
 
-    const formData = new FormData();
-    formData.append("content", newContent);
-    if (newImage) formData.append("image", newImage);
+  // --- HANDLE LIKE ---
+  const handleLike = async (id) => {
+    try {
+        const res = await fetch(`http://localhost:3000/like/${id}`, { credentials: "include" });
+        const data = await res.json();
+        if(data.success) {
+            setPosts(posts.map(p => p._id === id ? { ...p, likes: data.likes } : p));
+        }
+    } catch(err) { console.error(err); }
+  };
+
+  // --- HANDLE COMMENT (FIXED) ---
+  const handleComment = async (postId) => {
+    const text = commentText[postId];
+    if(!text) return;
 
     try {
-      const res = await fetch("http://localhost:3000/posting", {
-          method: "POST",
-          credentials: "include",
-          body: formData
-      });
-      const data = await res.json();
-      if (data.success) {
-          // Add new post to top (initialize comments array to avoid crash)
-          const safePost = { ...data.post, likes: [], comments: [] };
-          setPosts([safePost, ...posts]);
-          
-          // Reset form
-          setNewContent("");
-          setNewImage(null);
-          fileInputRef.current.value = "";
-      }
-    } catch (err) { console.error(err); }
+        const res = await fetch(`http://localhost:3000/comment/${postId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        
+        if(data.success) {
+            // ROBUST UPDATE: Handle if server returns full list OR single comment
+            setPosts(posts.map(p => {
+                if (p._id === postId) {
+                    // If server returned a 'comments' array, use it. 
+                    // If it returned a single 'comment' object, append it.
+                    const updatedComments = data.comments 
+                        ? data.comments 
+                        : [...(p.comments || []), data.comment]; 
+                    
+                    return { ...p, comments: updatedComments };
+                }
+                return p;
+            }));
+            setCommentText({ ...commentText, [postId]: "" }); // Clear input
+        }
+    } catch(err) { console.error("Comment failed:", err); }
   };
 
-  // 3. Like Logic
-  const handleLike = async (postId) => {
-      const res = await fetch(`http://localhost:3000/like/${postId}`, { credentials: "include" });
-      const data = await res.json();
-      if(data.success) {
-          setPosts(posts.map(p => p._id === postId ? { ...p, likes: data.likes } : p));
-      }
+  const toggleComments = (postId) => {
+    setActiveCommentBox(prev => ({ ...prev, [postId]: !prev[postId] }));
   };
 
-  // 4. Delete Post Logic
-  const handleDelete = async (postId) => {
-      if(!window.confirm("Delete this post?")) return;
-      const res = await fetch(`http://localhost:3000/delete/${postId}`, { method: "DELETE", credentials: "include" });
-      if(res.ok) setPosts(posts.filter(p => p._id !== postId));
-  };
-
-  // 5. NEW: Add Comment Logic
-  const handleComment = async (e, postId) => {
-      e.preventDefault();
-      const text = commentTexts[postId];
-      if(!text) return;
-
-      const res = await fetch(`http://localhost:3000/comment/${postId}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ text })
-      });
-      const data = await res.json();
-
-      if(data.success) {
-          // Update the specific post with the new comment
-          setPosts(posts.map(p => {
-              if (p._id === postId) {
-                  return { ...p, comments: [...p.comments, data.comment] };
-              }
-              return p;
-          }));
-          // Clear input for this post
-          setCommentTexts({ ...commentTexts, [postId]: "" });
-      }
+  const handleDelete = async (id) => {
+    if(!window.confirm("Delete post?")) return;
+    await fetch(`http://localhost:3000/delete/${id}`, { method: "DELETE", credentials: "include" });
+    setPosts(posts.filter(p => p._id !== id));
   };
 
   return (
-    <div className="feed">
-      {/* Create Post Box */}
-      <div className="post-card create-box">
-          <form onSubmit={handleCreatePost}>
-              <textarea 
-                className="create-input"
-                placeholder="What's on your mind?" 
-                value={newContent} 
-                onChange={(e) => setNewContent(e.target.value)} 
-              />
-              <div className="file-upload-area">
-                <input type="file" ref={fileInputRef} onChange={(e) => setNewImage(e.target.files[0])} />
-                <button type="submit" className="post-btn">Post</button>
-              </div>
-          </form>
+    <div>
+      {/* Create Box */}
+      <div className="card-panel">
+        <textarea 
+           className="styled-input" 
+           placeholder="What's happening?" 
+           value={content} 
+           onChange={e=>setContent(e.target.value)} 
+        />
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+           <input type="file" ref={fileRef} onChange={e=>setImage(e.target.files[0])} style={{color:'#888', fontSize:'12px'}}/>
+           <button onClick={handlePost} className="btn-primary">Post</button>
+        </div>
       </div>
 
-      {/* Feed List */}
+      {/* Feed */}
       {posts.map(post => (
-          <div key={post._id} className="post-card">
-              <div className="post-header">
-                  <div className="post-user-info">
-                    <div className="avatar">👤</div>
-                    <strong>@{post.username}</strong>
-                  </div>
-                  
-                  {/* Delete Button (Only if Admin or Author) */}
-                  {(user.isAdmin || user.username === post.username) && 
-                      <button onClick={() => handleDelete(post._id)} className="delete-btn">🗑️</button>
-                  }
+        <div key={post._id} className="card-panel">
+           
+           {/* Header */}
+           <div className="post-header-row">
+              <div className="user-group">
+                 <div className="user-avatar">
+                    {post.username ? post.username[0].toUpperCase() : "U"}
+                 </div>
+                 <div className="user-text">
+                    <h3>@{post.username}</h3>
+                    <span>Just now</span>
+                 </div>
               </div>
-
-              <p className="post-text">{post.content}</p>
-
-              {post.image && (
-                  <div className="image-container">
-                    <img src={`http://localhost:3000/uploads/${post.image}`} className="post-img" alt="Post content" />
-                  </div>
+              
+              {(user.isAdmin || user.username === post.username) && (
+                 <button onClick={() => handleDelete(post._id)} className="delete-btn">🗑️</button>
               )}
+           </div>
+           
+           {/* Content */}
+           <p className="post-content">{post.content}</p>
+           {post.image && <img src={`http://localhost:3000/uploads/${post.image}`} className="post-image" alt="Post" />}
+           
+           {/* Actions */}
+           <div className="action-row">
+              <button 
+                 onClick={() => handleLike(post._id)} 
+                 className={`action-item ${post.likes.includes(user.userId) ? 'liked' : ''}`}
+              >
+                 {post.likes.includes(user.userId) ? "❤️" : "🤍"} {post.likes.length}
+              </button>
+              
+              <button className="action-item" onClick={() => toggleComments(post._id)}>
+                 💬 {post.comments ? post.comments.length : 0} Comments
+              </button>
+           </div>
 
-              <div className="actions">
-                  <button onClick={() => handleLike(post._id)} className="btn-like">
-                      {post.likes.includes(user.userId) ? "❤️" : "🤍"} {post.likes.length} Likes
-                  </button>
-              </div>
+           {/* Comments Section */}
+           {activeCommentBox[post._id] && (
+               <div className="comment-container">
+                   <div className="comment-list">
+                       {(post.comments && post.comments.length > 0) ? (
+                           post.comments.map((c, i) => (
+                               <div key={i} className="comment-bubble">
+                                   <span className="comment-author">@{c.username || "User"}</span>
+                                   <span className="comment-text">{c.text}</span>
+                               </div>
+                           ))
+                       ) : (
+                           <p style={{color:'#666', fontSize:'13px', textAlign:'center'}}>No comments yet.</p>
+                       )}
+                   </div>
 
-              {/* NEW: Comment Section */}
-              <div className="comments-section">
-                  <div className="comments-list">
-                      {post.comments && post.comments.map(comment => (
-                          <div key={comment._id} className="comment-item">
-                              <span className="comment-user">{comment.username}: </span>
-                              <span>{comment.text}</span>
-                          </div>
-                      ))}
-                  </div>
-                  
-                  <form className="comment-form" onSubmit={(e) => handleComment(e, post._id)}>
-                      <input 
-                          type="text" 
-                          placeholder="Write a comment..." 
-                          value={commentTexts[post._id] || ""}
-                          onChange={(e) => setCommentTexts({...commentTexts, [post._id]: e.target.value})}
-                      />
-                      <button type="submit">Post</button>
-                  </form>
-              </div>
+                   <div className="comment-input-wrapper">
+                       <input 
+                           className="comment-input"
+                           placeholder="Write a comment..."
+                           value={commentText[post._id] || ""}
+                           onChange={(e) => setCommentText({...commentText, [post._id]: e.target.value})}
+                           onKeyDown={(e) => e.key === 'Enter' && handleComment(post._id)}
+                       />
+                       <button className="comment-send-btn" onClick={() => handleComment(post._id)}>➤</button>
+                   </div>
+               </div>
+           )}
 
-          </div>
+        </div>
       ))}
     </div>
   );
 }
-
 export default Home;

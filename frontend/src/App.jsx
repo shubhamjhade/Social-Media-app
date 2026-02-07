@@ -2,19 +2,18 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
 
-// Import our components
 import Navbar from "./components/Navbar";
 import Home from "./components/Home";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Admin from "./components/Admin";
-import Profile from "./components/Profile"; // New Profile Component
+import Profile from "./components/Profile";
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check if user is logged in when app starts
+  // Check Session
   useEffect(() => {
     fetch("http://localhost:3000/api/me", { credentials: "include" })
       .then(res => res.json())
@@ -25,25 +24,22 @@ function App() {
       .catch(() => setLoading(false));
   }, []);
 
-  if (loading) return <div style={{textAlign:'center', marginTop:'50px'}}>Loading SocialApp...</div>;
+  if (loading) return <div style={{height:'100vh', background:'#050505', color:'white', display:'flex', justifyContent:'center', alignItems:'center'}}>Loading...</div>;
 
   return (
     <BrowserRouter>
+      {user && <Navbar user={user} setUser={setUser} />}
+      
       <div className="app-container">
-        {/* Show Navbar only if logged in */}
-        {user && <Navbar user={user} setUser={setUser} />}
-
         <Routes>
-          {/* If not logged in, force to Login */}
+          <Route path="/" element={user ? <Home user={user} /> : <Navigate to="/login" />} />
           <Route path="/login" element={!user ? <Login setUser={setUser} /> : <Navigate to="/" />} />
           <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
           
-          {/* Protected Routes */}
-          <Route path="/" element={user ? <Home user={user} /> : <Navigate to="/login" />} />
-          <Route path="/admin" element={user && user.isAdmin ? <Admin /> : <Navigate to="/" />} />
+          {/* FIX: Passing setUser here is CRITICAL for the Profile Save button */}
+          <Route path="/profile" element={user ? <Profile user={user} setUser={setUser} /> : <Navigate to="/login" />} />
           
-          {/* Updated Profile Route */}
-          <Route path="/profile" element={user ? <Profile user={user} /> : <Navigate to="/login" />} />
+          <Route path="/admin" element={user?.isAdmin ? <Admin /> : <Navigate to="/" />} />
         </Routes>
       </div>
     </BrowserRouter>
